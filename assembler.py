@@ -44,6 +44,33 @@ class UVMAssembler:
                     
         return commands
     
+    # Кодирование команды в бинарный формат
+    def encode_command(self, cmd):
+        if cmd['type'] == 'LOAD_CONST':
+            # A=5 (биты 0-2), B=константа (биты 3-28)
+            encoded = (cmd['B'] << 3) | cmd['A']
+        elif cmd['type'] == 'READ_MEM':
+            # A=4 (биты 0-2)
+            encoded = cmd['A']
+        elif cmd['type'] == 'WRITE_MEM':
+            # A=7 (биты 0-2)
+            encoded = cmd['A']
+        elif cmd['type'] == 'ABS':
+            # A=2 (биты 0-2), B=адрес (биты 3-14)
+            encoded = ((cmd['B'] & 0xFFF) << 3) | cmd['A']
+        else:
+            raise ValueError(f"Неизвестный тип команды: {cmd['type']}")
+        
+        return encoded
+    
+    # Сохранение в бинарный файл
+    def save_binary(self, commands, output_file):
+        with open(output_file, 'wb') as f:
+            for cmd in commands:
+                encoded = self.encode_command(cmd)
+                # Записываем как 4-байтное little-endian значение
+                f.write(struct.pack('<I', encoded))
+    
     # Вывод промежуточного представления в формате полей
     def display_intermediate(self, commands):
         print("Промежуточное представление программы:")
@@ -69,7 +96,6 @@ class UVMAssembler:
         ]
         
         print("Тестовые случаи из спецификации УВМ:")
-        print("-" * 40)
         for i, test in enumerate(test_cases):
             print(f"Тест {i+1}: {test}")
         print()
@@ -92,6 +118,9 @@ def main():
         # Парсинг CSV файла
         commands = assembler.parse_csv(input_file)
         
+        # СОХРАНЕНИЕ В БИНАРНЫЙ ФАЙЛ (этого не было в вашем коде!)
+        assembler.save_binary(commands, output_file)
+        
         if test_mode:
             # Вывод промежуточного представления
             assembler.display_intermediate(commands)
@@ -100,17 +129,17 @@ def main():
             spec_tests = assembler.test_specification()
             
             print("Сравнение с тестами спецификации:")
-            print("-" * 35)
             for i, (parsed, spec) in enumerate(zip(commands[:4], spec_tests)):
                 match = parsed == spec
-                status = "✓ СОВПАДАЕТ" if match else "✗ НЕ СОВПАДАЕТ"
+                status = "совпало" if match else "не совпадает"
                 print(f"Команда {i}: {status}")
                 if not match:
                     print(f"  Получено: {parsed}")
                     print(f"  Ожидалось: {spec}")
             print()
         
-        print(f"Успешно ассемблировано {len(commands)} команд")
+        print(f"Успешно выполнено {len(commands)} команд")
+        print(f"Бинарный файл создан: {output_file}")
         
     except Exception as e:
         print(f"Ошибка ассемблирования: {e}")
