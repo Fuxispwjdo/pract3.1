@@ -71,10 +71,21 @@ class UVMAssembler:
                 # Записываем как 4-байтное little-endian значение
                 f.write(struct.pack('<I', encoded))
     
+    # Вывод hex представления команд
+    def display_hex(self, commands):
+        print("HEX представление команд:")
+        for i, cmd in enumerate(commands):
+            encoded = self.encode_command(cmd)
+            # Преобразуем в байты и затем в hex
+            bytes_data = struct.pack('<I', encoded)
+            hex_bytes = [f'0x{byte:02X}' for byte in bytes_data]
+            hex_string = ', '.join(hex_bytes)
+            print(f"Команда {i} ({cmd['type']}): {hex_string}")
+        print()
+    
     # Вывод промежуточного представления в формате полей
     def display_intermediate(self, commands):
         print("Промежуточное представление программы:")
-        print("-" * 50)
         for i, cmd in enumerate(commands):
             print(f"Команда {i}: {cmd['type']}")
             print(f"  Поле A: {cmd['A']} (биты 0-2)")
@@ -118,7 +129,10 @@ def main():
         # Парсинг CSV файла
         commands = assembler.parse_csv(input_file)
         
-        # СОХРАНЕНИЕ В БИНАРНЫЙ ФАЙЛ (этого не было в вашем коде!)
+        # ВЫВОД HEX ПРЕДСТАВЛЕНИЯ (всегда показываем)
+        assembler.display_hex(commands)
+        
+        # СОХРАНЕНИЕ В БИНАРНЫЙ ФАЙЛ
         assembler.save_binary(commands, output_file)
         
         if test_mode:
