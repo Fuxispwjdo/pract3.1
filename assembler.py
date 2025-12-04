@@ -143,6 +143,13 @@ class UVMAssemblerStage1:
             print(f"  Декодированное значение: {hex_data['encoded']}")
 
 def create_test_file():
+    """Создание тестового CSV файла"""
+    test_content = """
+5,129    # LOAD_CONST: A=5, B=129
+4,       # READ_MEM: A=4
+7,       # WRITE_MEM: A=7
+2,137    # ABS: A=2, B=137
+"""
     
     filename = "test_program.csv"
     try:
