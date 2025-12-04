@@ -155,6 +155,7 @@ def create_test_file():
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(test_content)
+        print(f"Создан тестовый файл: {filename}")
     except Exception as e:
         print(f"Ошибка создания файла: {e}")
 
@@ -162,7 +163,7 @@ def main():
     # Создаем тестовый файл, если его нет
     import os
     if not os.path.exists("test_program.csv"):
-        print("Создан тестовый файл")
+        print("Создание тестового файла")
         create_test_file()
     
     # Используем аргументы командной строки
@@ -190,7 +191,8 @@ def main():
     
     # Кодируем в hex
     hex_results = assembler.encode_to_hex(commands)
-
+    
+    # Выводим результат
     if test_mode:
         # Вывод в формате тестирования с hex
         for i, (cmd, hex_data) in enumerate(zip(commands, hex_results)):
