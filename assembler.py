@@ -1,163 +1,230 @@
 import sys
 import csv
-import struct
+import json
 
-class UVMAssembler:
+class UVMAssemblerStage1:
     def __init__(self):
         self.commands = []
-        
-    # Парсинг CSV и преобразование в промежуточное представление
+    
     def parse_csv(self, input_file):
+        """Парсинг CSV файла в формате: код_операции,аргумент"""
         commands = []
-        with open(input_file, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                if not row or row[0].startswith('#'):  # Пропускаем пустые строки и комментарии
-                    continue
-                    
-                cmd_type = row[0].strip().upper()
+        
+        try:
+            with open(input_file, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                line_num = 0
                 
-                if cmd_type == 'LOAD_CONST':
-                    # LOAD_CONST, константа
-                    if len(row) < 2:
-                        raise ValueError(f"Неверный формат команды LOAD_CONST: {row}")
-                    constant = int(row[1])
-                    commands.append({'type': 'LOAD_CONST', 'A': 5, 'B': constant})
+                for row in reader:
+                    line_num += 1
                     
-                elif cmd_type == 'READ_MEM':
-                    # READ_MEM
-                    commands.append({'type': 'READ_MEM', 'A': 4})
+                    # Пропускаем пустые строки и комментарии
+                    if not row or not row[0] or row[0].strip().startswith('#'):
+                        continue
                     
-                elif cmd_type == 'WRITE_MEM':
-                    # WRITE_MEM
-                    commands.append({'type': 'WRITE_MEM', 'A': 7})
+                    # Убираем лишние пробелы
+                    row = [cell.strip() for cell in row]
                     
-                elif cmd_type == 'ABS':
-                    # ABS, адрес
-                    if len(row) < 2:
-                        raise ValueError(f"Неверный формат команды ABS: {row}")
-                    address = int(row[1])
-                    commands.append({'type': 'ABS', 'A': 2, 'B': address})
+                    # Получаем код операции
+                    try:
+                        opcode = int(row[0])
+                    except ValueError:
+                        print(f"Ошибка в строке {line_num}: некорректный код операции '{row[0]}'")
+                        continue
                     
-                else:
-                    raise ValueError(f"Неизвестная команда: {cmd_type}")
+                    # Получаем аргумент (если есть)
+                    arg = None
+                    if len(row) > 1 and row[1] != '':
+                        try:
+                            arg = int(row[1])
+                        except ValueError:
+                            print(f"Ошибка в строке {line_num}: некорректный аргумент '{row[1]}'")
+                            continue
                     
-        return commands
+                    commands.append({
+                        'opcode': opcode,
+                        'arg': arg,
+                        'line': line_num
+                    })
+            
+            return commands
+            
+        except FileNotFoundError:
+            print(f"Файл '{input_file}' не найден!")
+            return []
+        except Exception as e:
+            print(f"Ошибка при чтении файла: {e}")
+            return []
     
-    # Кодирование команды в бинарный формат
-    def encode_command(self, cmd):
-        if cmd['type'] == 'LOAD_CONST':
-            # A=5 (биты 0-2), B=константа (биты 3-28)
-            encoded = (cmd['B'] << 3) | cmd['A']
-        elif cmd['type'] == 'READ_MEM':
-            # A=4 (биты 0-2)
-            encoded = cmd['A']
-        elif cmd['type'] == 'WRITE_MEM':
-            # A=7 (биты 0-2)
-            encoded = cmd['A']
-        elif cmd['type'] == 'ABS':
-            # A=2 (биты 0-2), B=адрес (биты 3-14)
-            encoded = ((cmd['B'] & 0xFFF) << 3) | cmd['A']
-        else:
-            raise ValueError(f"Неизвестный тип команды: {cmd['type']}")
+    def encode_to_hex(self, commands):
+        """Кодирование команд в hex представление"""
+        hex_results = []
         
-        return encoded
-    
-    # Сохранение в бинарный файл
-    def save_binary(self, commands, output_file):
-        with open(output_file, 'wb') as f:
-            for cmd in commands:
-                encoded = self.encode_command(cmd)
-                # Записываем как 4-байтное little-endian значение
-                f.write(struct.pack('<I', encoded))
-    
-    # Вывод hex представления команд
-    def display_hex(self, commands):
-        print("HEX представление команд:")
-        for i, cmd in enumerate(commands):
-            encoded = self.encode_command(cmd)
-            # Преобразуем в байты и затем в hex
-            bytes_data = struct.pack('<I', encoded)
-            hex_bytes = [f'0x{byte:02X}' for byte in bytes_data]
-            hex_string = ', '.join(hex_bytes)
-            print(f"Команда {i} ({cmd['type']}): {hex_string}")
-        print()
-    
-    # Вывод промежуточного представления в формате полей
-    def display_intermediate(self, commands):
-        print("Промежуточное представление программы:")
-        for i, cmd in enumerate(commands):
-            print(f"Команда {i}: {cmd['type']}")
-            print(f"  Поле A: {cmd['A']} (биты 0-2)")
-            if 'B' in cmd:
-                print(f"  Поле B: {cmd['B']} (биты 3-{28 if cmd['type'] == 'LOAD_CONST' else 14})")
-            print()
-    
-    # Проверка тестовых случаев из спецификации
-    def test_specification(self):
-        test_cases = [
-            # LOAD_CONST: A=5, B=129
-            {'type': 'LOAD_CONST', 'A': 5, 'B': 129},
-            # READ_MEM: A=4
-            {'type': 'READ_MEM', 'A': 4},
-            # WRITE_MEM: A=7
-            {'type': 'WRITE_MEM', 'A': 7},
-            # ABS: A=2, B=137
-            {'type': 'ABS', 'A': 2, 'B': 137}
-        ]
+        for cmd in commands:
+            opcode = cmd['opcode']
+            arg = cmd['arg']
+            
+            if opcode == 5:  # LOAD_CONST
+                # A=5 (биты 0-2), B=константа (биты 3-28)
+                encoded = (arg << 3) | opcode
+            elif opcode == 4:  # READ_MEM
+                # A=4 (биты 0-2)
+                encoded = opcode
+            elif opcode == 7:  # WRITE_MEM
+                # A=7 (биты 0-2)
+                encoded = opcode
+            elif opcode == 2:  # ABS
+                # A=2 (биты 0-2), B=адрес (биты 3-14)
+                encoded = ((arg & 0xFFF) << 3) | opcode
+            else:
+                encoded = opcode
+            
+            # Конвертируем в hex байты (little-endian, 4 байта)
+            hex_bytes = []
+            for i in range(4):
+                byte = (encoded >> (i * 8)) & 0xFF
+                hex_bytes.append(f"0x{byte:02X}")
+            
+            hex_results.append({
+                'cmd': cmd,
+                'encoded': encoded,
+                'hex_bytes': hex_bytes,
+                'hex_string': ', '.join(hex_bytes)
+            })
         
-        print("Тестовые случаи из спецификации УВМ:")
-        for i, test in enumerate(test_cases):
-            print(f"Тест {i+1}: {test}")
-        print()
-        
-        return test_cases
+        return hex_results
+    
+    def display_test_format(self, commands, hex_results):
+        """Вывод в формате тестирования с hex представлением"""
+        for i, (cmd, hex_data) in enumerate(zip(commands, hex_results)):
+            opcode = cmd['opcode']
+            arg = cmd['arg']
+            
+            if arg is not None:
+                print(f"A={opcode}, B={arg}")
+            else:
+                print(f"A={opcode}")
+            
+            # Выводим hex представление
+            print(f"HEX: {hex_data['hex_string']}")
+    
+    def display_detailed(self, commands, hex_results):
+        """Подробный вывод промежуточного представления"""
+        for i, (cmd, hex_data) in enumerate(zip(commands, hex_results)):
+            opcode = cmd['opcode']
+            arg = cmd['arg']
+            
+            # Определяем тип команды
+            cmd_type = "UNKNOWN"
+            if opcode == 5:
+                cmd_type = "LOAD_CONST"
+            elif opcode == 4:
+                cmd_type = "READ_MEM"
+            elif opcode == 7:
+                cmd_type = "WRITE_MEM"
+            elif opcode == 2:
+                cmd_type = "ABS"
+            
+            print(f"\nКоманда {i+1} (строка {cmd['line']}):")
+            print(f"  Тип: {cmd_type}")
+            print(f"  Код операции: {opcode}")
+            print(f"  Аргумент: {arg if arg is not None else 'нет'}")
+            
+            # Битовое представление
+            if cmd_type == "LOAD_CONST":
+                print(f"  Биты: A={opcode} (0-2), B={arg} (3-28)")
+            elif cmd_type == "ABS":
+                print(f"  Биты: A={opcode} (0-2), B={arg} (3-14)")
+            else:
+                print(f"  Биты: A={opcode} (0-2)")
+            
+            # Hex представление
+            print(f"  HEX: {hex_data['hex_string']}")
+            print(f"  Декодированное значение: {hex_data['encoded']}")
+
+def create_test_file():
+    
+    filename = "test_program.csv"
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(test_content)
+    except Exception as e:
+        print(f"Ошибка создания файла: {e}")
 
 def main():
+    # Создаем тестовый файл, если его нет
+    import os
+    if not os.path.exists("test_program.csv"):
+        print("Создан тестовый файл")
+        create_test_file()
+    
+    # Используем аргументы командной строки
     if len(sys.argv) < 4:
         print("Использование: python assembler.py <input.csv> <output.bin> --test")
-        print("  --test - режим тестирования (вывод промежуточного представления)")
+        print("Пример: python assembler.py test_program.csv program.bin --test")
+        print("\nБудет использован тестовый режим с выводом hex представления")
+        
+        # По умолчанию используем тестовый файл
+        input_file = "test_program.csv"
+        test_mode = True
+    else:
+        input_file = sys.argv[1]
+        # output_file = sys.argv[2]  # Не используется на этапе 1
+        test_mode = sys.argv[3] == "--test"
+    
+    assembler = UVMAssemblerStage1()
+    
+    # Парсим файл
+    commands = assembler.parse_csv(input_file)
+    
+    if not commands:
+        print(f"\nНе удалось загрузить команды из файла: {input_file}")
         return
     
-    input_file = sys.argv[1]
-    output_file = sys.argv[2]
-    test_mode = len(sys.argv) > 3 and sys.argv[3] == '--test'
+    # Кодируем в hex
+    hex_results = assembler.encode_to_hex(commands)
+
+    if test_mode:
+        # Вывод в формате тестирования с hex
+        for i, (cmd, hex_data) in enumerate(zip(commands, hex_results)):
+            opcode = cmd['opcode']
+            arg = cmd['arg']
+            
+            if arg is not None:
+                print(f"A={opcode}, B={arg}")
+            else:
+                print(f"A={opcode}")
+            
+            # Выводим hex представление как в спецификации
+            print(f"HEX: {hex_data['hex_string']}")
+    else:
+        # Подробный вывод
+        assembler.display_detailed(commands, hex_results)
     
-    assembler = UVMAssembler()
+    print(f"\nОбработано {len(commands)} команд")
     
+    # Сохраняем промежуточное представление для следующего этапа
+    intermediate_data = []
+    for cmd, hex_data in zip(commands, hex_results):
+        intermediate_data.append({
+            'opcode': cmd['opcode'],
+            'arg': cmd['arg'],
+            'hex': hex_data['hex_bytes'],
+            'encoded': hex_data['encoded']
+        })
+    
+    json_file = "intermediate.json"
     try:
-        # Парсинг CSV файла
-        commands = assembler.parse_csv(input_file)
-        
-        # ВЫВОД HEX ПРЕДСТАВЛЕНИЯ (всегда показываем)
-        assembler.display_hex(commands)
-        
-        # СОХРАНЕНИЕ В БИНАРНЫЙ ФАЙЛ
-        assembler.save_binary(commands, output_file)
-        
-        if test_mode:
-            # Вывод промежуточного представления
-            assembler.display_intermediate(commands)
-            
-            # Проверка тестовых случаев
-            spec_tests = assembler.test_specification()
-            
-            print("Сравнение с тестами спецификации:")
-            for i, (parsed, spec) in enumerate(zip(commands[:4], spec_tests)):
-                match = parsed == spec
-                status = "совпало" if match else "не совпадает"
-                print(f"Команда {i}: {status}")
-                if not match:
-                    print(f"  Получено: {parsed}")
-                    print(f"  Ожидалось: {spec}")
-            print()
-        
-        print(f"Успешно выполнено {len(commands)} команд")
-        print(f"Бинарный файл создан: {output_file}")
-        
+        with open(json_file, 'w', encoding='utf-8') as f:
+            json.dump(intermediate_data, f, indent=2, ensure_ascii=False)
+        print(f"Промежуточное представление сохранено в: {json_file}")
     except Exception as e:
-        print(f"Ошибка ассемблирования: {e}")
-        sys.exit(1)
+        print(f"Ошибка сохранения JSON: {e}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\nПрограмма прервана пользователем.")
+    except Exception as e:
+        print(f"\nНеожиданная ошибка: {e}")
